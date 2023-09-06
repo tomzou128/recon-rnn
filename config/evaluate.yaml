@@ -1,0 +1,10 @@
+DATASET: 'scannet_depth_rnn'
+BATCH_SIZE: 8
+MODE: 'val'  # 'train', 'val' or 'test
+
+TEST:
+  PATH: '/mnt/f/D/ScanNetv1'
+  TUPLE_PATH: '/mnt/f/D/ScanNetv1'   # location for pair file
+  N_VIEWS: 8
+  N_WORKERS: 4
+  NEAR: 0.5
