@@ -2,11 +2,15 @@ import torch
 import torch.nn as nn
 import kornia
 
-
 class LSTMFusion(torch.nn.Module):
     def __init__(self, base_channels=8):
         super(LSTMFusion, self).__init__()
         # C = 24
+        # self.lstm_cell = MVSLayernormConvLSTMCell(input_dim=base_channels * 5,
+        #                                           hidden_dim=base_channels * 5,
+        #                                           kernel_size=(3, 3),
+        #                                           activation_function=torch.celu)
+
         self.lstm_cell = MVSLayernormConvLSTMCell(input_dim=base_channels * 3,
                                                   hidden_dim=base_channels * 3,
                                                   kernel_size=(3, 3),
@@ -54,19 +58,19 @@ class MVSLayernormConvLSTMCell(nn.Module):
     def forward(self, input_tensor, cur_state, previous_pose, current_pose, estimated_current_depth, camera_matrix):
         h_cur, c_cur = cur_state
 
-        if previous_pose is not None:
-            transformation = torch.bmm(torch.inverse(previous_pose), current_pose)
-
-            non_valid = estimated_current_depth <= 0.01
-            h_cur = warp_frame_depth(image_src=h_cur,
-                                     depth_dst=estimated_current_depth,
-                                     src_trans_dst=transformation,
-                                     camera_matrix=camera_matrix,
-                                     normalize_points=False,
-                                     sampling_mode='bilinear')
-            b, c, h, w = h_cur.size()
-            non_valid = torch.cat([non_valid] * c, dim=1)
-            h_cur.data[non_valid] = 0.0
+        # if previous_pose is not None:
+        #     transformation = torch.bmm(torch.inverse(previous_pose), current_pose)
+        #
+        #     non_valid = estimated_current_depth <= 0.01
+        #     h_cur, mask = warp_frame_depth(image_src=h_cur,
+        #                              depth_dst=estimated_current_depth,
+        #                              src_trans_dst=transformation,
+        #                              camera_matrix=camera_matrix,
+        #                              normalize_points=False,
+        #                              sampling_mode='bilinear')
+        #     b, c, h, w = h_cur.size()
+        #     non_valid = torch.cat([non_valid] * c, dim=1)
+        #     h_cur.data[non_valid] = 0.0
 
         combined = torch.cat([input_tensor, h_cur], dim=1)  # concatenate along channel axis
         combined_conv = self.conv(combined)
@@ -99,7 +103,7 @@ def warp_frame_depth(
         src_trans_dst: torch.Tensor,
         camera_matrix: torch.Tensor,
         normalize_points: bool = False,
-        sampling_mode='bilinear') -> torch.Tensor:
+        sampling_mode='bilinear') -> (torch.Tensor, torch.Tensor):
     # TAKEN FROM KORNIA LIBRARY
     if not isinstance(image_src, torch.Tensor):
         raise TypeError(f"Input image_src type is not a torch.Tensor. Got {type(image_src)}.")
@@ -136,7 +140,7 @@ def warp_frame_depth(
 
     # apply transformation to the 3d points
     points_3d_src = kornia.transform_points(src_trans_dst[:, None], points_3d_dst)  # BxHxWx3
-    points_3d_src[:, :, :, 2] = torch.relu(points_3d_src[:, :, :, 2])
+    mask = (points_3d_src[:, :, :, 2] > 0).unsqueeze(1)
 
     # project back to pixels
     camera_matrix_tmp: torch.Tensor = camera_matrix[:, None, None]  # Bx1x1xHxW
@@ -146,4 +150,9 @@ def warp_frame_depth(
     height, width = depth_dst.shape[-2:]
     points_2d_src_norm: torch.Tensor = kornia.normalize_pixel_coordinates(points_2d_src, height, width)  # BxHxWx2
 
-    return torch.nn.functional.grid_sample(image_src, points_2d_src_norm, align_corners=True, mode=sampling_mode)
+    warp_feature = torch.nn.functional.grid_sample(image_src, points_2d_src_norm, align_corners=True, mode=sampling_mode)
+
+    C = warp_feature.shape[1]
+    mask_3 = mask.repeat(1, C, 1, 1)
+    warp_feature[~mask_3] = 0.0
+    return warp_feature, mask

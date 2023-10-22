@@ -8,9 +8,14 @@ import matplotlib.pyplot as plt
 
 def read_img(filepath):
     img = cv2.imread(filepath).astype(np.float32) / 255
-    img = cv2.resize(img, (640, 480))
+    img = cv2.resize(img, (256, 192))
     return torch.tensor(img)
 
+
+def read_pred_depth(filepath):
+    pred_depth = np.load(filepath).astype(np.float32)
+    pred_depth /= 1000.
+    return torch.tensor(pred_depth, dtype=torch.float32)
 
 def read_gt_depth(filepath):
     # Read depth image and camera pose
@@ -21,7 +26,7 @@ def read_gt_depth(filepath):
 
 
 def read_cam_file(filepath, vid):
-    intrinsics = np.loadtxt(os.path.join(filepath, 'intrinsic', 'intrinsic_depth.txt'), delimiter=' ')[:3, :3]
+    intrinsics = np.loadtxt(os.path.join(filepath, 'intrinsic', 'intrinsic_depth.txt'), delimiter=' ')[:3, :3] * (192/480)
     intrinsics = intrinsics.astype(np.float32)
     poses = np.loadtxt(os.path.join(filepath, 'pose', '{}.txt'.format(str(vid))))
     return torch.tensor(intrinsics, dtype=torch.float32), torch.tensor(poses, dtype=torch.float32)
@@ -89,13 +94,13 @@ def warp_frame_depth(
     return warp_feature, mask
 
 
-im_1, im_2 = 70, 73
-img_1 = read_img(f"F:/D/ScanNetv1/scans/scene0000_00/color/{im_1}.jpg")
-img_2 = read_img(f"F:/D/ScanNetv1/scans/scene0000_00/color/{im_2}.jpg")
-depth_1 = read_gt_depth(f"F:/D/ScanNetv1/scans/scene0000_00/depth/{im_1}.png")
-depth_2 = read_gt_depth(f"F:/D/ScanNetv1/scans/scene0000_00/depth/{im_2}.png")
-in_1, ext_1 = read_cam_file("F:/D/ScanNetv1/scans/scene0000_00/", im_1)
-in_2, ext_2 = read_cam_file("F:/D/ScanNetv1/scans/scene0000_00/", im_2)
+im_1, im_2 = 96, 159
+img_1 = read_img(f"/mnt/f/D/ScanNetv1/scans/scene0088_01/color/{im_1}.jpg")
+img_2 = read_img(f"/mnt/f/D/ScanNetv1/scans/scene0088_01/color/{im_2}.jpg")
+depth_1 = read_pred_depth(f"/mnt/f/D/ScanNetv1/scans/scene0088_01/sr_pred_depth/{im_1}_pred_depth.npy")
+depth_2 = read_pred_depth(f"/mnt/f/D/ScanNetv1/scans/scene0088_01/sr_pred_depth/{im_2}_pred_depth.npy")
+in_1, ext_1 = read_cam_file("/mnt/f/D/ScanNetv1/scans/scene0088_01/", im_1)
+in_2, ext_2 = read_cam_file("/mnt/f/D/ScanNetv1/scans/scene0088_01/", im_2)
 # trans_2_to_1 = torch.mm(ext_1, torch.inverse(ext_2)).unsqueeze(0)
 trans_2_to_1 = torch.mm(torch.inverse(ext_1), ext_2).unsqueeze(0)
 # transformation = torch.eye(4).unsqueeze(0)

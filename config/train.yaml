@@ -1,32 +1,29 @@
-DATASET: 'scannet_depth_rnn'
-BATCH_SIZE: 32
 LOGDIR: './checkpoints'
 SAVE_FREQ: 1
+#RESUME: True
 MODE: 'train'
 
-TRAIN:
+DATA:
+  NAME: 'scannet_depth_rnn'
   PATH: 'F:/D/ScanNetv1'
-  TUPLE_PATH: "data_splits/ScanNetv1-Pre"
-#  EPOCHS: 99
-  EPOCHS: 20
-  N_VIEWS: 8
-  LR: 1e-3
+  TUPLE_PATH: "data_splits/ScanNetv1/"
+#  TUPLE_PATH: "data_splits/ScanNetv1-Pre/"
+#  TUPLE_FILE: 'train_views_035.txt'
+  BATCH_SIZE: 24
   N_WORKERS: 4
-  LREPOCHS: '12,24,48,52,56,60:2'
-#  FINETUNE_LAYER: None # choose None to train the whole model; choose 0, 1 or 2 to finetune a specific layer
-#  FINETUNE_LAYER: 2 # choose None to train the whole model; choose 0, 1 or 2 to finetune a specific layer
-  MIN_DEPTH: 0.25
-  MAX_DEPTH: 5.0
+  N_VIEWS: 8
+  LOAD_IMG: True
+#  LOAD_IMG: False
 
-TEST:
-  PATH: 'F:/D/ScanNetv1'
-  TUPLE_PATH: "data_splits/ScanNetv1-Pre"
-  N_VIEWS: 8
-  N_WORKERS: 4
+
+TRAIN:
+  EPOCHS: 30
+  LR: 1e-3
+#  LREPOCHS: '12,24,48,52,56,60:2'
+  LREPOCHS: '18,24,26,28:2'
+#  LREPOCHS: '10,14,16,18:2'
+
 
 MODEL:
-  PASS_LAYERS: 2 # When finetune a specific layer, set PASS_LAYERS equal to TRAIN.FINETUNE_LAYER to save inference time.
-  N_LAYER: 3
-
   BACKBONE2D:
     ARC: 'fpn-mnas-1'

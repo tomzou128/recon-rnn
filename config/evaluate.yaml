@@ -1,10 +1,16 @@
-DATASET: 'scannet_depth_rnn'
-BATCH_SIZE: 8
 MODE: 'val'  # 'train', 'val' or 'test
 
-TEST:
-  PATH: '/mnt/f/D/ScanNetv1'
-  TUPLE_PATH: '/mnt/f/D/ScanNetv1'   # location for pair file
-  N_VIEWS: 8
+DATA:
+  NAME: 'scannet_depth_rnn'
+  PATH: 'F:/D/ScanNetv1'
+  TUPLE_PATH: "data_splits/ScanNetv1/"
+#  TUPLE_PATH: "data_splits/ScanNetv1-Pre/"
+#  TUPLE_FILE: 'train_views_3510.txt'
+#  TUPLE_FILE: 'train_2.txt'
+  BATCH_SIZE: 24
   N_WORKERS: 4
-  NEAR: 0.5
+  N_VIEWS: 8
+
+TEST:
+  MIN_DEPTH: 0.25
+  MAX_DEPTH: 5.0

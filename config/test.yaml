@@ -1,45 +1,27 @@
-DATASET: 'scannet_depth_rnn'
-BATCH_SIZE: 30
-SAVE_SCENE_MESH: True
 LOGDIR: './checkpoints'
-SAVE_FREQ: 1
-MODE: 'val'
-LOADCKPT: 'train_trained/model_000009.ckpt'
+MODE: 'test'
+LOADCKPT: 'small_depth_train/model_000029.ckpt'
+#LOADCKPT: 'model_000029.ckpt'
 #SCENE: 'scene0710_00' # test a specific scene e.g. 'scene0785_00'; default: None to test all scenes
 
+DATA:
+  NAME: 'scannet_depth_rnn'
+  PATH: 'F:/D/ScanNetv1'
+  TUPLE_PATH: "data_splits/ScanNetv1/"
+#  TUPLE_PATH: "data_splits/ScanNetv1-Pre/"
+#  TUPLE_FILE: 'train_views_3510.txt'
+  BATCH_SIZE: 64
+  N_WORKERS: 6
+  N_VIEWS: 8
 
-#TRAIN:
-#  PATH: '/mnt/f/D/ScanNetv1-Pre'
-#  EPOCHS: 991
-#  N_VIEWS: 9
-#  LR: 1e-3
-#  N_WORKERS: 8
-#  LREPOCHS: '12,24,48:2'
+#  LOAD_IMG: True
+  LOAD_IMG: False
 
 TEST:
-  PATH: '/mnt/f/D/ScanNetv1'
-  TUPLE_PATH: "data_splits/ScanNetv1"
-  N_VIEWS: 8
-  N_WORKERS: 6
+  MIN_DEPTH: 0.25
+  MAX_DEPTH: 5.0
+  PRINT_GT: True
 
 MODEL:
-#  SINGLE_LAYER_MESH: True
-  PASS_LAYERS: 2 # choose 0, 1 or 2 to output results at different layers (resolutions)
-  N_LAYER: 3
-#  N_VOX: [96, 96, 96]
-#  VOXEL_SIZE: 0.04
-#  TRAIN_NUM_SAMPLE: [4096, 16384, 65536]
-#  TEST_NUM_SAMPLE: [4096, 16384, 65536]
-
   BACKBONE2D:
     ARC: 'fpn-mnas-1'
-
-#  FUSION:
-#    FUSION_ON: True
-#    HIDDEN_DIM: 64
-#    SPARSIFY: "continuous_k"
-#
-#  LW: [1.0, 0.8, 0.64]
-#  TOP_K_OCC: [9, 9, 9]
-#  THRESHOLDS: [0, 0, 0]
-#  POS_WEIGHT: 1.5

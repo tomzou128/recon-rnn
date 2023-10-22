@@ -28,25 +28,26 @@ def update_losses(predictions, weights, groundtruth, is_training, l1_meter, hube
     sample_l1_loss, sample_huber_loss, sample_l1_inv_loss, sample_l1_rel_loss, sample_valid_count = None, None, None, None, None
     if is_training:
         for j, prediction in enumerate(predictions):
-            sample_l1_loss, sample_huber_loss, sample_l1_inv_loss, sample_l1_rel_loss, sample_valid_count = \
-                calculate_loss(groundtruth=groundtruth, prediction=prediction)
+            # sample_l1_loss, sample_huber_loss, sample_l1_inv_loss, sample_l1_rel_loss, sample_valid_count = \
+            #     calculate_loss(groundtruth=groundtruth, prediction=prediction)
+            sample_l1_loss, sample_valid_count = calculate_loss(groundtruth=groundtruth, prediction=prediction)
 
             if loss_type == "L1":
                 optimizer_loss = optimizer_loss + weights[j] * (sample_l1_loss / sample_valid_count)
-            elif loss_type == "L1-inv":
-                optimizer_loss = optimizer_loss + weights[j] * (sample_l1_inv_loss / sample_valid_count)
-            elif loss_type == "L1-rel":
-                optimizer_loss = optimizer_loss + weights[j] * (sample_l1_rel_loss / sample_valid_count)
-            elif loss_type == "Huber":
-                optimizer_loss = optimizer_loss + weights[j] * (sample_huber_loss / sample_valid_count)
+            # elif loss_type == "L1-inv":
+            #     optimizer_loss = optimizer_loss + weights[j] * (sample_l1_inv_loss / sample_valid_count)
+            # elif loss_type == "L1-rel":
+            #     optimizer_loss = optimizer_loss + weights[j] * (sample_l1_rel_loss / sample_valid_count)
+            # elif loss_type == "Huber":
+            #     optimizer_loss = optimizer_loss + weights[j] * (sample_huber_loss / sample_valid_count)
     else:
-        sample_l1_loss, sample_huber_loss, sample_l1_inv_loss, sample_l1_rel_loss, sample_valid_count = calculate_loss(groundtruth=groundtruth,
-                                                                                                                       prediction=predictions[-1])
-        optimizer_loss = optimizer_loss + weights[-1] * (sample_l1_inv_loss / sample_valid_count)
+        # sample_l1_loss, sample_huber_loss, sample_l1_inv_loss, sample_l1_rel_loss, sample_valid_count = calculate_loss(groundtruth=groundtruth, prediction=predictions[-1])
+        sample_l1_loss, sample_valid_count = calculate_loss(groundtruth=groundtruth, prediction=predictions[-1])
+        optimizer_loss = optimizer_loss + weights[-1] * (sample_l1_loss / sample_valid_count)
     l1_meter.update(sample_l1_loss.item(), sample_valid_count)
-    huber_meter.update(sample_huber_loss.item(), sample_valid_count)
-    l1_inv_meter.update(sample_l1_inv_loss.item(), sample_valid_count)
-    l1_rel_meter.update(sample_l1_rel_loss.item(), sample_valid_count)
+    # huber_meter.update(sample_huber_loss.item(), sample_valid_count)
+    # l1_inv_meter.update(sample_l1_inv_loss.item(), sample_valid_count)
+    # l1_rel_meter.update(sample_l1_rel_loss.item(), sample_valid_count)
 
     return optimizer_loss
 
@@ -62,22 +63,22 @@ def calculate_loss(groundtruth, prediction):
                                                    size=(height_scaled, width_scaled),
                                                    mode='nearest')
 
-    valid_mask = groundtruth_scaled > 0
+    valid_mask = groundtruth_scaled > 0.0
     valid_count = valid_mask.nonzero().size()[0]
 
     groundtruth_valid = groundtruth_scaled[valid_mask]
     prediction_valid = prediction[valid_mask]
 
-    groundtruth_inverse_valid = 1.0 / groundtruth_valid
-    prediction_inverse_valid = 1.0 / prediction_valid
+    # groundtruth_inverse_valid = 1.0 / groundtruth_valid
+    # prediction_inverse_valid = 1.0 / prediction_valid
 
     l1_diff = torch.abs(groundtruth_valid - prediction_valid)
 
-    smooth_l1_loss = torch.nn.functional.smooth_l1_loss(prediction_valid, groundtruth_valid, reduction='none')
-    smooth_l1_loss = torch.sum(smooth_l1_loss)
+    # smooth_l1_loss = torch.nn.functional.smooth_l1_loss(prediction_valid, groundtruth_valid, reduction='none')
+    # smooth_l1_loss = torch.sum(smooth_l1_loss)
 
     l1_loss = torch.sum(l1_diff)
-    l1_inv_loss = torch.sum(torch.abs(groundtruth_inverse_valid - prediction_inverse_valid))
-    l1_rel_loss = torch.sum(l1_diff / groundtruth_valid)
+    # l1_inv_loss = torch.sum(torch.abs(groundtruth_inverse_valid - prediction_inverse_valid))
+    # l1_rel_loss = torch.sum(l1_diff / groundtruth_valid)
 
-    return l1_loss, smooth_l1_loss, l1_inv_loss, l1_rel_loss, valid_count
+    return l1_loss, valid_count # smooth_l1_loss, l1_inv_loss, l1_rel_loss,

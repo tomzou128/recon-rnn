@@ -22,17 +22,13 @@ class ToTensor(object):
     """ Convert to torch tensors """
 
     def __call__(self, data):
-        # data['imgs'] = torch.Tensor(np.stack(data['imgs']).transpose([0, 3, 1, 2]))
-        data['intrinsics'] = torch.Tensor(data['intrinsics'])
-        data['poses'] = torch.Tensor(data['poses'])
+        if 'imgs' in data:
+            data['imgs'] = torch.Tensor(np.stack(data['imgs']).transpose([0, 3, 1, 2]))
+        data['intrinsics'] = torch.Tensor(np.stack(data['intrinsics']))
+        data['poses'] = torch.Tensor(np.stack(data['poses']))
         # data['depth_ids'] = torch.Tensor(np.stack(data['depth_ids']))
         data['pred_depths'] = torch.Tensor(np.stack(data['pred_depths']))
-        if 'gt_depths' in data.keys():
-            data['gt_depths'] = torch.Tensor(np.stack(data['gt_depths']))
-        # if 'tsdf_list_full' in data.keys():
-        #     for i in range(len(data['tsdf_list_full'])):
-        #         if not torch.is_tensor(data['tsdf_list_full'][i]):
-        #             data['tsdf_list_full'][i] = torch.Tensor(data['tsdf_list_full'][i])
+        data['gt_depths'] = torch.Tensor(np.stack(data['gt_depths']))
         return data
 
 

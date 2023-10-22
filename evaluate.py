@@ -1,11 +1,6 @@
 import argparse
-from loguru import logger
 from config import cfg, update_config
 from tqdm import tqdm
-import os
-
-import torch
-from torch import nn
 from torch.utils.data import DataLoader
 
 from datasets import transforms, find_dataset_def
@@ -39,40 +34,31 @@ transform = [
     transforms.ToTensor()
 ]
 transforms = transforms.Compose(transform)
-scene_path = os.path.join(cfg.TEST.TUPLE_PATH, cfg.MODE + '.txt')
-Dataset = find_dataset_def(cfg.DATASET)
+Dataset = find_dataset_def(cfg.DATA.NAME)
 dataset = Dataset(cfg, transforms)
-img_loader = DataLoader(dataset, cfg.BATCH_SIZE, shuffle=False, num_workers=cfg.TEST.N_WORKERS, drop_last=False)
+img_loader = DataLoader(dataset, cfg.DATA.BATCH_SIZE, shuffle=False, num_workers=cfg.DATA.N_WORKERS, drop_last=False)
 
 
 def evaluate():
-    all_frame_metrics = ResultsAverager('Evaluation', 'frame_metrics')
-    img_loader.dataset.epoch = 0
-
+    all_frame_metrics = ResultsAverager('frame_metrics')
+    print(len(img_loader))
     for batch_idx, sample in tqdm(enumerate(img_loader)):
         sample = tocuda(sample)
-        metric_dict = eval_depth_batched(sample['pred_depths'], sample['gt_depths'], cfg.TEST.NEAR, cfg.TEST.FAR)
+        metric_dict = eval_depth_batched(sample['pred_depths'].flatten(0, 1), sample['gt_depths'].flatten(0, 1), cfg.TEST.MIN_DEPTH, cfg.TEST.MAX_DEPTH)
 
-        n_sample = sample['gt_depths'].shape[0]
-        for i in range(n_sample):
-            sample_metrics = {}
-            for key in list(metric_dict.keys()):
-                sample_metrics[key] = metric_dict[key][i]
-            all_frame_metrics.update_results(sample_metrics)
+        all_frame_metrics.update_batch(metric_dict)
 
-    all_frame_metrics.compute_final_average()
-    all_frame_metrics.pretty_print_results(print_running_metrics=False)
-    all_frame_metrics.print_sheets_friendly(
-        include_metrics_names=True,
-        print_running_metrics=False
-    )
+        if batch_idx % 100 == 0:
+            all_frame_metrics.print_metrics()
 
-    out_path = os.path.join(cfg.OUTDIR, 'evaluate')
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
-    all_frame_metrics.output_json(
-        os.path.join(out_path, f'all_frame_avg_metrics_{cfg.MODE}.json')
-    )
+    all_frame_metrics.print_metrics()
+
+    # out_path = os.path.join(cfg.OUTDIR, 'evaluate')
+    # if not os.path.exists(out_path):
+    #     os.makedirs(out_path)
+    # all_frame_metrics.output_json(
+    #     os.path.join(out_path, f'all_frame_avg_metrics_{cfg.MODE}.json')
+    # )
 
 
 if __name__ == '__main__':

@@ -2,8 +2,10 @@ import torch
 
 import numpy as np
 import json
+from collections import defaultdict
 
-def eval_depth(depth_pred, depth_trgt, near=0.0, far=10.0):
+
+def eval_depth(depth_pred, depth_trgt, near=0.25, far=10.0):
     """ Computes 2d metrics between two depth maps
 
     Args:
@@ -48,7 +50,7 @@ def eval_depth(depth_pred, depth_trgt, near=0.0, far=10.0):
 
 
 def eval_depth_batched(depth_pred, depth_trgt, near=0, far=10.0):
-    depth_pred = torch.stack(depth_pred).squeeze(2).permute(1, 0, 2, 3)
+    # depth_pred = torch.stack(depth_pred).squeeze(2).permute(1, 0, 2, 3)
     mask1 = depth_pred > 0  # ignore values where prediction is 0 (% complete)
     mask = (depth_trgt < far) * (depth_trgt > near) * mask1
 
@@ -78,191 +80,220 @@ def eval_depth_batched(depth_pred, depth_trgt, near=0, far=10.0):
     r3[~mask_bN] = torch.nan
 
     metrics = {}
-    metrics['AbsRel'] = torch.nanmean(abs_rel, dim=1)
-    metrics['AbsDiff'] = torch.nanmean(abs_diff, dim=1)
-    metrics['SqRel'] = torch.nanmean(sq_rel, dim=1)
-    metrics['RMSE'] = torch.sqrt(torch.nanmean(sq_diff, dim=1))
-    metrics['LogRMSE'] = torch.sqrt(torch.nanmean(sq_log_diff, dim=1))
-    metrics['r5'] = torch.nanmean(r5, dim=1)
-    metrics['r10'] = torch.nanmean(r10, dim=1)
-    metrics['r1'] = torch.nanmean(r1, dim=1)
-    metrics['r2'] = torch.nanmean(r2, dim=1)
-    metrics['r3'] = torch.nanmean(r3, dim=1)
-    metrics['complete'] = torch.mean(mask1.float(), dim=1)
+    metrics['AbsRel ↓'] = torch.nanmean(abs_rel, dim=1)
+    metrics['AbsDiff ↓'] = torch.nanmean(abs_diff, dim=1)
+    metrics['SqRel ↓'] = torch.nanmean(sq_rel, dim=1)
+    metrics['RMSE ↓'] = torch.sqrt(torch.nanmean(sq_diff, dim=1))
+    metrics['LogRMSE ↓'] = torch.sqrt(torch.nanmean(sq_log_diff, dim=1))
+    metrics['r5% ↑'] = torch.nanmean(r5, dim=1)
+    metrics['r10% ↑'] = torch.nanmean(r10, dim=1)
+    metrics['r25% ↑'] = torch.nanmean(r1, dim=1)
+    metrics['r25%^2 ↑'] = torch.nanmean(r2, dim=1)
+    metrics['r25%^3 ↑'] = torch.nanmean(r3, dim=1)
+    metrics['complete'] = torch.mean(mask_bN.float(), dim=1)
 
     return metrics
 
 
 class ResultsAverager():
-    """
-    Helper class for stable averaging of metrics across frames and scenes.
-    """
-
-    def __init__(self, exp_name, metrics_name):
-        """
-            Args:
-                exp_name: name of the specific experiment.
-                metrics_name: type of metrics.
-        """
-        self.exp_name = exp_name
+    def __init__(self, metrics_name):
         self.metrics_name = metrics_name
+        self.metrics = defaultdict(lambda: 0)
+        self.count = 0
 
-        self.elem_metrics_list = []
-        self.running_metrics = None
-        self.running_count = 0
+    def update_batch(self, metrics):
+        n = None
+        for key, values in metrics.items():
+            n = len(values)
+            self.metrics[key] = (self.metrics[key] * self.count + values.sum().item()) / (self.count + n)
+        self.count += n
 
-        self.final_computed_average = None
-
-    def update_results(self, elem_metrics):
-        """
-        Adds elem_matrix to elem_metrics_list. Updates running_metrics with
-        incomming metrics to keep a running average.
-
-        running_metrics are cheap to compute but not totally stable.
-        """
-
-        self.elem_metrics_list.append(elem_metrics.copy())
-
-        if self.running_metrics is None:
-            self.running_metrics = elem_metrics.copy()
-        else:
-            for key in list(elem_metrics.keys()):
-                self.running_metrics[key] = (
-                                                    self.running_metrics[key] *
-                                                    self.running_count
-                                                    + elem_metrics[key]
-                                            ) / (self.running_count + 1)
-
-        self.running_count += 1
-
-    def print_sheets_friendly(
-            self, print_exp_name=True,
-            include_metrics_names=False,
-            print_running_metrics=True,
-    ):
-        """
-        Print for easy sheets copy/paste.
-        Args:
-            print_exp_name: should we print the experiment name?
-            include_metrics_names: should we print a row for metric names?
-            print_running_metrics: should we print running metrics or the
-                final average?
-        """
-
-        if print_exp_name:
-            print(f"{self.exp_name}, {self.metrics_name}")
-
-        if print_running_metrics:
-            metrics_to_print = self.running_metrics
-        else:
-            metrics_to_print = self.final_metrics
-
-        if len(self.elem_metrics_list) == 0:
-            print("WARNING: No valid metrics to print.")
+    def print_metrics(self):
+        print(f"{self.metrics_name}, no. of frame: {self.count}")
+        if self.count == 0:
+            print("WARNING: Count is 0")
             return
 
         metric_names_row = ""
         metrics_row = ""
-        for k, v in metrics_to_print.items():
+        for k, v in self.metrics.items():
             metric_names_row += f"{k:8} "
             metric_string = f"{v:.4f},"
             metrics_row += f"{metric_string:8} "
 
-        if include_metrics_names:
-            print(metric_names_row)
+        print(metric_names_row)
         print(metrics_row)
 
-    def output_json(self, filepath, print_running_metrics=False):
-        """
-        Outputs metrics to a json file.
-        Args:
-            filepath: file path where we should save the file.
-            print_running_metrics: should we print running metrics or the
-                final average?
-        """
-        scores_dict = {}
-        scores_dict["exp_name"] = self.exp_name
-        scores_dict["metrics_type"] = self.metrics_name
-
-        scores_dict["scores"] = {}
-
-        if print_running_metrics:
-            metrics_to_use = self.running_metrics
-        else:
-            metrics_to_use = self.final_metrics
-
-        if len(self.elem_metrics_list) == 0:
-            print("WARNING: No valid metrics will be output.")
-
-        metric_names_row = ""
-        metrics_row = ""
-        for k, v in metrics_to_use.items():
-            metric_names_row += f"{k:8} "
-            metric_string = f"{v:.4f},"
-            metrics_row += f"{metric_string:8} "
-            scores_dict["scores"][k] = float(v)
-
-        scores_dict["metrics_string"] = metric_names_row
-        scores_dict["scores_string"] = metrics_row
-
-        with open(filepath, "w") as file:
-            json.dump(scores_dict, file, indent=4)
-
-    def pretty_print_results(
-            self,
-            print_exp_name=True,
-            print_running_metrics=True
-    ):
-        """
-        Pretty print for easy(ier) reading
-        Args:
-            print_exp_name: should we print the experiment name?
-            include_metrics_names: should we print a row for metric names?
-            print_running_metrics: should we print running metrics or the
-                final average?
-        """
-        if print_running_metrics:
-            metrics_to_print = self.running_metrics
-        else:
-            metrics_to_print = self.final_metrics
-
-        if len(self.elem_metrics_list) == 0:
-            print("WARNING: No valid metrics to print.")
-            return
-
-        if print_exp_name:
-            print(f"{self.exp_name}, {self.metrics_name}")
-        for k, v in metrics_to_print.items():
-            print(f"{k:8}: {v:.4f}")
-
-    def compute_final_average(self, ignore_nans=False):
-        """
-        Computes final a final average on the metrics element list using
-        numpy.
-
-        This should be more accurate than running metrics as it's a single
-        average vs multiple high level multiplications and divisions.
-
-        Args:
-            ignore_nans: ignore nans in the results and run using nanmean.
-        """
-
-        self.final_metrics = {}
-
-        if len(self.elem_metrics_list) == 0:
-            print("WARNING: no valid entry to average!")
-            return
-
-        for key in list(self.running_metrics.keys()):
-            values = []
-            for element in self.elem_metrics_list:
-                if torch.is_tensor(element[key]):
-                    values.append(element[key].cpu().numpy())
-                else:
-                    values.append(element[key])
-
-            if ignore_nans:
-                mean_value = np.nanmean(np.array(values))
-            else:
-                mean_value = np.array(values).mean()
-            self.final_metrics[key] = mean_value
+# class ResultsAverager():
+#     """
+#     Helper class for stable averaging of metrics across frames and scenes.
+#     """
+#
+#     def __init__(self, exp_name, metrics_name):
+#         """
+#             Args:
+#                 exp_name: name of the specific experiment.
+#                 metrics_name: type of metrics.
+#         """
+#         self.exp_name = exp_name
+#         self.metrics_name = metrics_name
+#
+#         self.elem_metrics_list = []
+#         self.running_metrics = None
+#         self.running_count = 0
+#
+#         self.final_computed_average = None
+#
+#     def update_results(self, elem_metrics):
+#         """
+#         Adds elem_matrix to elem_metrics_list. Updates running_metrics with
+#         incomming metrics to keep a running average.
+#
+#         running_metrics are cheap to compute but not totally stable.
+#         """
+#
+#         self.elem_metrics_list.append(elem_metrics.copy())
+#
+#         if self.running_metrics is None:
+#             self.running_metrics = elem_metrics.copy()
+#         else:
+#             for key in list(elem_metrics.keys()):
+#                 self.running_metrics[key] = (
+#                                                     self.running_metrics[key] *
+#                                                     self.running_count
+#                                                     + elem_metrics[key]
+#                                             ) / (self.running_count + 1)
+#
+#         self.running_count += 1
+#
+#     def print_sheets_friendly(
+#             self, print_exp_name=True,
+#             include_metrics_names=False,
+#             print_running_metrics=True,
+#     ):
+#         """
+#         Print for easy sheets copy/paste.
+#         Args:
+#             print_exp_name: should we print the experiment name?
+#             include_metrics_names: should we print a row for metric names?
+#             print_running_metrics: should we print running metrics or the
+#                 final average?
+#         """
+#
+#         if print_exp_name:
+#             print(f"{self.exp_name}, {self.metrics_name}")
+#
+#         if print_running_metrics:
+#             metrics_to_print = self.running_metrics
+#         else:
+#             metrics_to_print = self.final_metrics
+#
+#         if len(self.elem_metrics_list) == 0:
+#             print("WARNING: No valid metrics to print.")
+#             return
+#
+#         metric_names_row = ""
+#         metrics_row = ""
+#         for k, v in metrics_to_print.items():
+#             metric_names_row += f"{k:8} "
+#             metric_string = f"{v:.4f},"
+#             metrics_row += f"{metric_string:8} "
+#
+#         if include_metrics_names:
+#             print(metric_names_row)
+#         print(metrics_row)
+#
+#     def output_json(self, filepath, print_running_metrics=False):
+#         """
+#         Outputs metrics to a json file.
+#         Args:
+#             filepath: file path where we should save the file.
+#             print_running_metrics: should we print running metrics or the
+#                 final average?
+#         """
+#         scores_dict = {}
+#         scores_dict["exp_name"] = self.exp_name
+#         scores_dict["metrics_type"] = self.metrics_name
+#
+#         scores_dict["scores"] = {}
+#
+#         if print_running_metrics:
+#             metrics_to_use = self.running_metrics
+#         else:
+#             metrics_to_use = self.final_metrics
+#
+#         if len(self.elem_metrics_list) == 0:
+#             print("WARNING: No valid metrics will be output.")
+#
+#         metric_names_row = ""
+#         metrics_row = ""
+#         for k, v in metrics_to_use.items():
+#             metric_names_row += f"{k:8} "
+#             metric_string = f"{v:.4f},"
+#             metrics_row += f"{metric_string:8} "
+#             scores_dict["scores"][k] = float(v)
+#
+#         scores_dict["metrics_string"] = metric_names_row
+#         scores_dict["scores_string"] = metrics_row
+#
+#         with open(filepath, "w") as file:
+#             json.dump(scores_dict, file, indent=4)
+#
+#     def pretty_print_results(
+#             self,
+#             print_exp_name=True,
+#             print_running_metrics=True
+#     ):
+#         """
+#         Pretty print for easy(ier) reading
+#         Args:
+#             print_exp_name: should we print the experiment name?
+#             include_metrics_names: should we print a row for metric names?
+#             print_running_metrics: should we print running metrics or the
+#                 final average?
+#         """
+#         if print_running_metrics:
+#             metrics_to_print = self.running_metrics
+#         else:
+#             metrics_to_print = self.final_metrics
+#
+#         if len(self.elem_metrics_list) == 0:
+#             print("WARNING: No valid metrics to print.")
+#             return
+#
+#         if print_exp_name:
+#             print(f"{self.exp_name}, {self.metrics_name}")
+#         for k, v in metrics_to_print.items():
+#             print(f"{k:8}: {v:.4f}")
+#
+#     def compute_final_average(self, ignore_nans=False):
+#         """
+#         Computes final a final average on the metrics element list using
+#         numpy.
+#
+#         This should be more accurate than running metrics as it's a single
+#         average vs multiple high level multiplications and divisions.
+#
+#         Args:
+#             ignore_nans: ignore nans in the results and run using nanmean.
+#         """
+#
+#         self.final_metrics = {}
+#
+#         if len(self.elem_metrics_list) == 0:
+#             print("WARNING: no valid entry to average!")
+#             return
+#
+#         for key in list(self.running_metrics.keys()):
+#             values = []
+#             for element in self.elem_metrics_list:
+#                 if torch.is_tensor(element[key]):
+#                     values.append(element[key].cpu().numpy())
+#                 else:
+#                     values.append(element[key])
+#
+#             if ignore_nans:
+#                 mean_value = np.nanmean(np.array(values))
+#             else:
+#                 mean_value = np.array(values).mean()
+#             self.final_metrics[key] = mean_value

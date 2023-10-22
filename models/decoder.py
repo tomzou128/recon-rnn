@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn.functional as F
 
 def conv_layer(input_channels, output_channels, kernel_size, stride, apply_bn_relu):
     if apply_bn_relu:
@@ -27,7 +27,9 @@ def conv_layer(input_channels, output_channels, kernel_size, stride, apply_bn_re
 def depth_layer_3x3(input_channels):
     return torch.nn.Sequential(
         torch.nn.Conv2d(input_channels, 1, 3, padding=1),
-        torch.nn.Sigmoid())
+        # torch.nn.Sigmoid()
+        torch.nn.Tanh()
+    )
 
 
 class UpconvolutionLayer(torch.nn.Module):
@@ -133,7 +135,7 @@ class Decoder(torch.nn.Module):
         self.depth_layer_half = depth_layer_3x3(base_channels)
         self.depth_layer_full = depth_layer_3x3(base_channels)
 
-    def forward(self, pred_depth, feature_half, feature_quarter, rnn_state):
+    def forward(self, pred_depth, feature_half, feature_quarter, rnn_state, image=None):
         # work on cost volume
         # decoder_block1 = self.decoder_block1(bottom, skip3, None)
         # sigmoid_depth_one_sixteen = self.depth_layer_one_sixteen(decoder_block1)
@@ -143,27 +145,34 @@ class Decoder(torch.nn.Module):
         # sigmoid_depth_one_eight = self.depth_layer_one_eight(decoder_block2)
         # inverse_depth_one_eight = self.inverse_depth_multiplier * sigmoid_depth_one_eight + self.inverse_depth_base
 
+        # pred_depth_quarter = torch.nn.functional.interpolate(pred_depth, scale_factor=(1.0 / 4.0), mode='nearest')
+        #
         # decoder_block3 = self.decoder_block3(rnn_state, feature_quarter, None)
-        # sigmoid_depth_quarter = self.depth_layer_quarter(decoder_block3)
-        # inverse_depth_quarter = self.inverse_depth_multiplier * sigmoid_depth_quarter + self.inverse_depth_base
+        # residual_depth_quarter = self.depth_layer_quarter(decoder_block3)
+        # depth_quarter = pred_depth_quarter + residual_depth_quarter
+
+        pred_depth_half = torch.nn.functional.interpolate(pred_depth, scale_factor=(1.0 / 2.0), mode='nearest')
 
         decoder_block4 = self.decoder_block4(rnn_state, feature_half, None)
-        sigmoid_depth_half = self.depth_layer_half(decoder_block4)
-        inverse_depth_half = self.inverse_depth_multiplier * sigmoid_depth_half + self.inverse_depth_base
+        # decoder_block4 = self.decoder_block4(rnn_state, feature_half, residual_depth_quarter)
+        residual_depth_half = self.depth_layer_half(decoder_block4)
+        depth_half = pred_depth_half + residual_depth_half
 
-        scaled_depth = torch.nn.functional.interpolate(sigmoid_depth_half, scale_factor=2, mode='bilinear',
-                                                       align_corners=True)
-        scaled_decoder = torch.nn.functional.interpolate(decoder_block4, scale_factor=2, mode='bilinear',
-                                                         align_corners=True)
+        scaled_depth = F.interpolate(
+            residual_depth_half, scale_factor=2, mode='bilinear', align_corners=True
+        )
+        scaled_decoder = F.interpolate(
+            decoder_block4, scale_factor=2, mode='bilinear', align_corners=True
+        )
         scaled_combined = torch.cat([scaled_decoder, scaled_depth, pred_depth], dim=1)
+        # scaled_combined = torch.cat([scaled_decoder, scaled_depth, pred_depth, image], dim=1)
         scaled_combined = self.refine(scaled_combined)
-        inverse_depth_full = self.inverse_depth_multiplier * self.depth_layer_full(
-            scaled_combined) + self.inverse_depth_base
-
-        depth_full = 1.0 / inverse_depth_full
-        depth_half = 1.0 / inverse_depth_half
-        # depth_quarter = 1.0 / inverse_depth_quarter.squeeze(1)
-        # depth_one_eight = 1.0 / inverse_depth_one_eight.squeeze(1)
-        # depth_one_sixteen = 1.0 / inverse_depth_one_sixteen.squeeze(1)
+        residual_depth_full = self.depth_layer_full(scaled_combined)
+        depth_full = pred_depth + residual_depth_full
 
         return depth_full, depth_half
+        # return depth_full, depth_half, depth_quarter
+
+
+class LargeDecoder(torch.nn.Module):
+    pass
