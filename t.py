@@ -135,3 +135,21 @@ plt.show()
 plt.imshow(img_2_b.squeeze(0).permute(1, 2, 0))
 plt.title("img_2")
 plt.show()
+
+all_seqs = []
+seq_length = 8
+queue = deque()
+
+while i < len(keyframe_list):
+    if (pose_dist(keyframe_list[i - 1], keyframe_list[i]) < t):
+        queue.append(keyframe_list[i])
+        '
+    else:
+        queue.clear()
+
+    i += 1
+
+    if len(queue) == seq_length:
+        all_seqs.append(list(queue))
+        queue.clear()
+        i -= 4

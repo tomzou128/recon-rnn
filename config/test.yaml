@@ -1,7 +1,7 @@
 LOGDIR: './checkpoints'
 MODE: 'test'
-LOADCKPT: 'small_depth_train/model_000029.ckpt'
-#LOADCKPT: 'model_000029.ckpt'
+#LOADCKPT: 'deep/model_000013.ckpt'
+LOADCKPT: 'model_000029.ckpt'
 #SCENE: 'scene0710_00' # test a specific scene e.g. 'scene0785_00'; default: None to test all scenes
 
 DATA:
@@ -10,12 +10,12 @@ DATA:
   TUPLE_PATH: "data_splits/ScanNetv1/"
 #  TUPLE_PATH: "data_splits/ScanNetv1-Pre/"
 #  TUPLE_FILE: 'train_views_3510.txt'
-  BATCH_SIZE: 64
+  BATCH_SIZE: 32
   N_WORKERS: 6
   N_VIEWS: 8
 
-#  LOAD_IMG: True
-  LOAD_IMG: False
+  LOAD_IMG: True
+#  LOAD_IMG: False
 
 TEST:
   MIN_DEPTH: 0.25

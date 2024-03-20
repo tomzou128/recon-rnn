@@ -1,1 +1,1 @@
-from models.depthrnn_net import DepthRNN
+from models.depthrnn_net import DepthRNN, DepthRNN2

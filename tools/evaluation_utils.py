@@ -54,8 +54,8 @@ def eval_depth_batched(depth_pred, depth_trgt, near=0, far=10.0):
     mask1 = depth_pred > 0  # ignore values where prediction is 0 (% complete)
     mask = (depth_trgt < far) * (depth_trgt > near) * mask1
 
-    depth_gt_bN = depth_trgt.flatten(start_dim=1).float()
-    depth_pred_bN = depth_pred.flatten(start_dim=1).float()
+    depth_gt_bN = depth_trgt.clone().flatten(start_dim=1).float()
+    depth_pred_bN = depth_pred.clone().flatten(start_dim=1).float()
     mask_bN = mask.flatten(start_dim=1)
 
     depth_gt_bN[~mask_bN] = torch.nan
@@ -104,7 +104,7 @@ class ResultsAverager():
     def update_batch(self, metrics):
         n = None
         for key, values in metrics.items():
-            n = len(values)
+            n = torch.numel(values)
             self.metrics[key] = (self.metrics[key] * self.count + values.sum().item()) / (self.count + n)
         self.count += n
 

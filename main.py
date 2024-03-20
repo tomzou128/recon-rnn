@@ -6,10 +6,11 @@ import torch
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 from loguru import logger
+import numpy as np
 
 from utils import tensor2float, save_scalars, make_nograd_func, tocuda  # DictAverageMeter, SaveScene, make_nograd_func
 from datasets import transforms, find_dataset_def
-from models import DepthRNN
+from models import DepthRNN, DepthRNN2
 from config import cfg, update_config
 from tools.evaluation_utils import eval_depth_batched, ResultsAverager
 
@@ -164,6 +165,9 @@ def validate():
 
 
 def test():
+    store_best = True
+    if store_best:
+        best_list = [{'diff': -1} for _ in range(30)]
     dataset, dataloader = load_data(cfg)
     model = load_new_model(cfg)
 
@@ -203,6 +207,49 @@ def test():
                                                 cfg.TEST.MAX_DEPTH)
             gt_frame_metrics.update_batch(gt_metric_dict)
 
+        # frame select
+        if store_best:
+            sr_depths_2 = pred_depths[:, 2]
+            pred_depths_2 = full_depths[:, 2]
+            gt_depths_2 = gt_depths[:, 2]
+            imgs_2 = sample["imgs"][:, 3]
+
+            pred_metric_2 = {k: v[2::7] for k, v in metric_dict.items()}
+            sr_metric_2 = {k: v[2::7] for k, v in gt_metric_dict.items()}
+
+            diff = pred_metric_2["r5% ↑"] - sr_metric_2["r5% ↑"]
+            idxs = torch.argsort(diff, descending=True)[:10]
+
+            if store_best:
+                for idx in idxs:
+                    if diff[idx] > 0.03:
+                        insert_idx = -1
+                        running_min = 1
+                        for list_i in range(len(best_list)):
+                            old_diff = best_list[list_i]['diff']
+                            new_diff = diff[idx].cpu().numpy()
+
+                            if old_diff < new_diff:
+                                new_st = idx * 7
+                                new_ed = new_st + 7
+                                best_list[list_i] = {
+                                    'diff': new_diff,
+                                    # 'sr_metric': {k: v[idx].cpu().numpy() for k, v in sr_metric_2.items()},
+                                    # 'sr_metric': gt_metric_dict[new_st:new_ed],
+                                    # 'pred_metric': {k: v[idx].cpu().numpy() for k, v in pred_metric_2.items()},
+                                    # 'pred_metric': metric_dict[new_st:new_ed],
+                                    # 'sr_depth': sr_depths_2[idx].cpu().numpy(),
+                                    'sr_depth': pred_depths[new_st:new_ed],
+                                    # 'pred_depth': pred_depths_2[idx].cpu().numpy(),
+                                    'pred_depth': full_depths[new_st:new_ed],
+                                    # 'gt_depth': gt_depths_2[idx].cpu().numpy(),
+                                    'gt_depth': gt_depths[new_st:new_ed],
+                                    # 'img': imgs_2[idx].cpu().numpy(),
+                                    'img': sample["imgs"][idx * 8 + 1: idx * 8 + 8],
+                                }
+                                print(f"saving, {new_diff}, replace: {old_diff}")
+                                break
+
         for key, values in metric_dict.items():
             metric_dict[key] = values.unflatten(0, (B, T))
         for i, metric in enumerate(step_frame_metrics):
@@ -213,6 +260,12 @@ def test():
 
         if batch_idx % 20 == 0:
             all_frame_metrics.print_metrics()
+
+        if batch_idx > 100:
+            break
+
+    for i, element in enumerate(best_list):
+        np.save(f"out/{i}.npy", element)
 
     all_frame_metrics.print_metrics()
 

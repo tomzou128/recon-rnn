@@ -1,6 +1,6 @@
 LOGDIR: './checkpoints'
 SAVE_FREQ: 1
-#RESUME: True
+RESUME: True
 MODE: 'train'
 
 DATA:
@@ -9,7 +9,7 @@ DATA:
   TUPLE_PATH: "data_splits/ScanNetv1/"
 #  TUPLE_PATH: "data_splits/ScanNetv1-Pre/"
 #  TUPLE_FILE: 'train_views_035.txt'
-  BATCH_SIZE: 24
+  BATCH_SIZE: 20
   N_WORKERS: 4
   N_VIEWS: 8
   LOAD_IMG: True
